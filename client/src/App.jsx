@@ -54,20 +54,20 @@ function App() {
     title: "", subject: "", dueDate: todayString(), hours: "2", priority: "2"
   });
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch(`${API_URL}/tasks`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not load assignments.");
-      setTasks(data);
-    } catch (err) {
-      setError(`${err.message}. Check that the backend is running on port 5000.`);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadTasks = useCallback(() => {
+  setLoading(true);
+  setError("");
+
+  try {
+    const savedTasks = localStorage.getItem(STORAGE_KEY);
+    setTasks(savedTasks ? JSON.parse(savedTasks) : []);
+  } catch {
+    setTasks([]);
+    setError("Could not load saved assignments.");
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadTasks();
@@ -136,53 +136,63 @@ function App() {
       return;
     }
 
-    try {
-      const response = await fetch(`${API_URL}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not add assignment.");
-      setTasks((current) => [...current, data]);
-      setForm({ title: "", subject: "", dueDate: todayString(), hours: "2", priority: "2" });
-      setSuccess("Assignment added successfully!");
-    } catch (err) {
-      setError(err.message);
-    }
+    const newTask = {
+  ...payload,
+  id: crypto.randomUUID(),
+  completed: false,
+  createdAt: new Date().toISOString()
+};
+
+setTasks((current) => {
+  const updatedTasks = [...current, newTask];
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTasks));
+  return updatedTasks;
+});
+
+setForm({
+  title: "",
+  subject: "",
+  dueDate: todayString(),
+  hours: "2",
+  priority: "2"
+});
+
+setSuccess("Assignment added successfully!");
   }
 
-  async function toggleTask(task) {
-    setError("");
-    setSuccess("");
-    try {
-      const response = await fetch(`${API_URL}/tasks/${task.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ completed: !task.completed })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not update assignment.");
-      setTasks((current) => current.map((item) => item.id === task.id ? data : item));
-    } catch (err) {
-      setError(err.message);
-    }
+    function toggleTask(task) {
+  setError("");
+  setSuccess("");
+
+  setTasks((current) => {
+    const updatedTasks = current.map((item) =>
+      item.id === task.id
+        ? { ...item, completed: !item.completed }
+        : item
+    );
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTasks));
+    return updatedTasks;
+  });
   }
 
-  async function deleteTask(task) {
-    if (!window.confirm(`Delete "${task.title}"?`)) return;
-    setError("");
-    setSuccess("");
-    try {
-      const response = await fetch(`${API_URL}/tasks/${task.id}`, { method: "DELETE" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not delete assignment.");
-      setTasks((current) => current.filter((item) => item.id !== task.id));
-      setSuccess("Assignment deleted.");
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+  function deleteTask(task) {
+  if (!window.confirm(`Delete "${task.title}"?`)) return;
+
+  setError("");
+  setSuccess("");
+
+  setTasks((current) => {
+    const updatedTasks = current.filter(
+      (item) => item.id !== task.id
+    );
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedTasks));
+    return updatedTasks;
+  });
+
+  setSuccess("Assignment deleted.");
+}
 
   return (
     <div className="app-shell">
@@ -246,7 +256,7 @@ function App() {
               </div>
               <button className="primary-button submit-button" type="submit"><Plus size={17} /> Add to my deadlines</button>
             </form>
-            <div className="form-footnote"><Check size={15} /> Your assignments are saved by the backend.</div>
+            <div className="form-footnote"><Check size={15} /> Your assignments are saved in this browser.</div>
           </section>
 
           <section className="panel tasks-panel">
